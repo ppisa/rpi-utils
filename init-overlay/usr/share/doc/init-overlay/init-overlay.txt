@@ -1,0 +1,64 @@
+Overlay Setup for Read-Only Root FS
+===================================
+  Pavel Pisa <ppisa@pikron.com>
+
+To activate feature "/sbin/init-overlay" has to
+be set as init in Linux kernel command line.
+
+I.e. add "ro init=/sbin/init-overlay" at the end
+of "/boot/cmdline.txt" line.
+
+The script mounts "tmpfs" filesystem on this
+place after boot and prepares required mount points there.
+Then binds original root filesystem on "/overlay/robase"
+creates another filesystem for temporal data
+at "/overlay/rwdata". It is "tmpfs" for now but some
+another partition can be used to keep data over boot
+there.
+
+Then script finds available overlay filesystem support
+"overlayfs aufs unionfs" and prepares combined filesystem
+at "/overlay/combined". The last operations are 
+swaping of root filesystem of actual (PID 1) process
+with "/overlay/pivot" and invoking regular distribution
+provided "/sbin/init".
+
+The feature can be disabled temporarily by creation
+of "/overlay/disable" file in this directory.
+But this file has to be created on original
+filesystem. From system running overlay setup
+this can be achieved by when logged in as root
+(sudo -i) by next commands sequence
+
+  mkdir /mnt/tmp
+  mount /dev/mmcblk0p1 /mnt
+  cd /mnt/tmp
+  touch overlay/disable
+  reboot
+
+To activate overaly setup again simply remove
+overlay disable file
+
+  rm /overlay/disable
+
+Distribution can be updated with some care directly
+from overlay running system
+
+  mount -o remount,rw /overlay/robase/
+  chroot /overlay/robase/
+  aptitude update
+  ...
+
+But services restart during update can behave badly
+for now. It can to be resolved in future by
+mounting/binding of "run", "dev" and "proc"
+between main and chrooted environment but even
+in this case reboot will required to take real effect.
+
+Another options is to run updates in base system and
+if sucesfull copy changes from "/overlay/rwdata/"
+to base filesystem. But to ensure consistent state
+it would require to use filesystem with RW snapshots/
+subvolumes support which tries to boot once to updated
+system and if correct made changes permanent by atomic
+commit. Can be done on btrfs with subvolumes.
