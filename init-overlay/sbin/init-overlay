@@ -1,0 +1,116 @@
+#!/bin/sh
+
+# Try more ways how to activate filesystem support
+#  i.e. check for compiled in option or if modprobe or insmod suceed
+insmodule()
+{
+    if ! /bin/grep -q $1 /proc/filesystems ; then
+        /sbin/modprobe $1 >/dev/null 2>/dev/null
+        if ! /bin/grep -q $1 /proc/filesystems ; then
+            if [ -d "${rootmnt}/lib/modules/$(uname -r)/extra/$1" ] ; then
+                /sbin/insmod "${rootmnt}/lib/modules/$(uname -r)/extra/$1/$1.ko"
+                if [ $? -eq 0 ]  ; then
+                    echo $1
+                fi
+            fi
+            if [ -d "${rootmnt}/lib/modules/$(uname -r)/kernel/fs/$1" ] ; then
+                /sbin/insmod "${rootmnt}/lib/modules/$(uname -r)/kernel/fs/$1/$1.ko"
+                if [ $? -eq 0 ]  ; then
+                    echo $1
+                fi
+            fi
+        else
+            echo $1
+        fi
+    else
+        echo $1
+    fi
+}
+
+if [ -e "/overlay/disable" ] || grep -q '\( \|^\)overlay=disable\( \|$\)' /proc/cmdline ; then
+    echo "Overlay skipped by request"
+    exec /sbin/init
+fi
+
+# If no specific overlay support is selected, try all known options
+if [ -z "$OVERLAY" ] ; then
+    OVERLAY="overlayfs aufs unionfs"
+fi
+
+if [ ! -e /proc/filesystems ] ; then
+    /bin/mount -n -t proc -o "nodev,noexec,nosuid" proc /proc
+    proc_local_mount=y
+fi
+
+for i in $OVERLAY
+do
+    OVERLAY=$(insmodule $i)
+    [ "$OVERLAY" = "$i" ] && break
+done
+
+# For initrd for NFS diskless RO root
+#ovr_rwdata=/tmp/unirw
+#ovr_robase=${rootmnt}
+#ovr_combined=${rootmnt}
+#ovr_for_nfs=nfs
+
+#For local system rearranged from init
+/bin/mount -n -t tmpfs none /overlay
+/bin/mkdir -p /overlay/rwdata
+/bin/mkdir -p /overlay/robase
+/bin/mkdir -p /overlay/combined
+/bin/mount --bind / /overlay/robase
+
+ovr_rwdata=/overlay/rwdata
+ovr_robase=/overlay/robase
+ovr_combined=/overlay/combined
+
+# Prepare filesystem for local data storage...
+/bin/mkdir -p ${ovr_rwdata}
+/bin/mount -n -t tmpfs none ${ovr_rwdata}
+
+case "$OVERLAY" in
+    overlayfs) echo "Remounting root as overlayfs ..."
+        /bin/mount -n -t overlayfs -o upperdir=${ovr_rwdata},lowerdir=${ovr_robase} overlayfs ${ovr_combined}
+        ;;
+    aufs) echo "Remounting root as aufs ..."
+        /bin/mount -n -t aufs -o dirs=${ovr_rwdata}=rw:${ovr_robase}=${ovr_for_nfs}ro aufs ${ovr_combined}
+        ;;
+    unionfs) echo "Remounting root as unionfs ..."
+        /bin/mount -n -t unionfs -o dirs=${ovr_rwdata}=rw:${ovr_robase}=ro unionfs ${ovr_combined}
+        ;;
+    *) panic "Actual initrd.img or system has not a module for overlay filesystem"
+        ;;
+esac
+
+if [ -n "$proc_local_mount" ] ; then
+    /bin/umount -n /proc
+fi
+
+# Move rwdata mount under new prepared filesystem to allow access
+# to local rwdata in case of tmpsfs
+/bin/mkdir -p ${ovr_combined}/overlay/rwdata
+/bin/mount -n --move ${ovr_rwdata} ${ovr_combined}/overlay/rwdata
+/bin/mkdir -p ${ovr_combined}/overlay/robase
+/bin/mount -n --move ${ovr_robase} ${ovr_combined}/overlay/robase
+/bin/mkdir -p ${ovr_combined}/overlay/pivot
+chmod 755 ${ovr_combined} # Disable rw access for non-root users
+
+/bin/touch ${ovr_combined}/fastboot
+
+# Create standard mount points for virtual filesystems
+/bin/mkdir -p ${ovr_combined}/dev
+/bin/mkdir -p ${ovr_combined}/proc
+/bin/mkdir -p ${ovr_combined}/sys
+/bin/mkdir -p ${ovr_combined}/tmp
+/bin/mkdir -p ${ovr_combined}/run
+/bin/mkdir -p ${ovr_combined}/var/lock
+
+cd ${ovr_combined}
+
+echo "Ready to proceed by pivot_root"
+#sleep 5
+#/bin/sh
+
+/sbin/pivot_root . overlay/pivot
+exec /usr/sbin/chroot . sbin/init
