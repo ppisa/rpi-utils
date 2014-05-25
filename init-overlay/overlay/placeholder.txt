@@ -1,0 +1,2 @@
+Do not remove this file it ensures that GIT populates
+this directory.
