@@ -27,8 +27,8 @@ insmodule()
     fi
 }
 
-if [ -e "/overlay/disable" ] || grep -q '\( \|^\)overlay=disable\( \|$\)' /proc/cmdline ; then
-    echo "Overlay skipped by request"
+if [ -e "/overlay/disable" ] ; then
+    echo "Overlay disabled"
     exec /sbin/init
 fi
 
@@ -40,6 +40,14 @@ fi
 if [ ! -e /proc/filesystems ] ; then
     /bin/mount -n -t proc -o "nodev,noexec,nosuid" proc /proc
     proc_local_mount=y
+fi
+
+if grep -q '\( \|^\)overlay=disable\( \|$\)' /proc/cmdline ; then
+    echo "Overlay disabled by command line argument"
+    if [ -n "$proc_local_mount" ] ; then
+        /bin/umount -n /proc
+    fi
+    exec /sbin/init
 fi
 
 for i in $OVERLAY
