@@ -1,0 +1,93 @@
+#!/bin/sh
+#
+# Script to easily access/mount and manipulate with partitions of image file
+#
+# Copyright (C) 2014 Pavel Pisa <ppisa@pikron.com>
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+my_dir="$(pwd)"
+lopart_dir="$my_dir/lopart"
+imgmnt_dir="$my_dir/imgmnt"
+img_file=$my_dir/rpi-wheezy-overlay
+
+if [ $# -lt 1 ] ; then
+  echo "usage: mount-img-parts [mount|umount|losetup|lodetach] [img_file]"
+  exit 1
+fi
+
+action=$1
+
+if [ $# -ge 2 ] ; then
+  img_file="$(readlink -f "$2")"
+fi
+
+case $action in
+  losetup)
+    for loop_dev in $(losetup -a | sed -n -e 's#^\([^ ]*\): [^(]*('"$img_file"').*$#\1#p') ; do
+      /sbin/losetup -d $lopart_dir/loop0   2>/dev/null
+    done
+    rm -f "$lopart_dir/pdev"*
+
+    echo "setting loops for /home/pi/projects/rpi/archive/lopart/loop0"
+    loop_dev="$(losetup -f --show $img_file)"
+    if [ $? -ne 0 ] ; then
+      echo >2 "failed: losetup -f --show $img_file"
+      exit 1
+    fi
+    cp -a "$loop_dev" "$lopart_dir/pdev0"
+    ;;
+  lodetach)
+    for mntpt_dir in $(sed -n -e 's#/dev/loop[0-9]* \('"$imgmnt_dir/[^ ]*"'\) .*$#\1#p' /proc/mounts) ; do
+      echo "unmounting $mntpt_dir"
+      umount "$mntpt_dir"
+      rmdir "$mntpt_dir"
+    done
+    for loop_dev in $(losetup -a | sed -n -e 's#^\([^ ]*\): [^(]*('"$img_file"').*$#\1#p') ; do
+      echo "losetup detach $loop_dev"
+      /sbin/losetup -d $loop_dev
+    done
+    rm -f "$lopart_dir/pdev"*
+    exit 0
+    ;;
+esac
+
+/sbin/parted $img_file -ms unit B p | tr ':B' ' ' | (
+  while read pnum pstart pend psize ptype ; do
+    case $pnum in
+      [1-4])
+        echo "$action pnum=$pnum pstart=$pstart pend=$pend psize=$psize ptype=$ptype"
+        case $action in
+          mount)
+            mkdir -p "$imgmnt_dir/p$pnum" || exit 1
+            mount -o loop,offset=$pstart,sizelimit=$psize "$img_file" "$imgmnt_dir/p$pnum" || exit 1
+            ;;
+          umount)
+            umount "$imgmnt_dir/p$pnum"
+            rmdir "$imgmnt_dir/p$pnum"
+            ;;
+          losetup)
+            mkdir -p "$lopart_dir" || exit 1
+            loop_dev="$(losetup --offset $pstart --sizelimit $psize -f --show $img_file)"
+            if [ $? -ne 0 ] ; then
+              echo >2 "failed: losetup --offset $pstart --sizelimit $psize -f --show $img_file"
+              exit 1
+            fi
+            rm -f "$lopart_dir/pdev$pnum"
+            cp -a "$loop_dev" "$lopart_dir/pdev$pnum"
+        esac
+        ;;
+    esac
+  done
+)
