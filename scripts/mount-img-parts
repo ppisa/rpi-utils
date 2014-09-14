@@ -35,8 +35,11 @@ fi
 
 case $action in
   losetup)
+    for loop_dev in $(find $lopart_dir -name "pdev*" ) ; do
+      /sbin/losetup -d $loop_dev 2>/dev/null
+    done
     for loop_dev in $(losetup -a | sed -n -e 's#^\([^ ]*\): [^(]*('"$img_file"').*$#\1#p') ; do
-      /sbin/losetup -d $lopart_dir/loop0   2>/dev/null
+      /sbin/losetup -d $loop_dev 2>/dev/null
     done
     rm -f "$lopart_dir/pdev"*
 
@@ -53,6 +56,9 @@ case $action in
       echo "unmounting $mntpt_dir"
       umount "$mntpt_dir"
       rmdir "$mntpt_dir"
+    done
+    for loop_dev in $(find $lopart_dir -name "pdev*" ) ; do
+      /sbin/losetup -d $loop_dev 2>/dev/null
     done
     for loop_dev in $(losetup -a | sed -n -e 's#^\([^ ]*\): [^(]*('"$img_file"').*$#\1#p') ; do
       echo "losetup detach $loop_dev"
@@ -84,8 +90,8 @@ esac
               echo >2 "failed: losetup --offset $pstart --sizelimit $psize -f --show $img_file"
               exit 1
             fi
-            rm -f "$lopart_dir/pdev$pnum"
-            cp -a "$loop_dev" "$lopart_dir/pdev$pnum"
+            rm -f "$lopart_dir/pdev0p$pnum"
+            cp -a "$loop_dev" "$lopart_dir/pdev0p$pnum"
         esac
         ;;
     esac
