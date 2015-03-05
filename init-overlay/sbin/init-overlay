@@ -34,7 +34,7 @@ fi
 
 # If no specific overlay support is selected, try all known options
 if [ -z "$OVERLAY" ] ; then
-    OVERLAY="overlay overlayfs aufs unionfs"
+    OVERLAY="aufs overlay overlayfs unionfs"
 fi
 
 if [ ! -e /proc/filesystems ] ; then
