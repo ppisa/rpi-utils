@@ -34,7 +34,7 @@ fi
 
 # If no specific overlay support is selected, try all known options
 if [ -z "$OVERLAY" ] ; then
-    OVERLAY="overlayfs aufs unionfs"
+    OVERLAY="overlay overlayfs aufs unionfs"
 fi
 
 if [ ! -e /proc/filesystems ] ; then
@@ -78,6 +78,11 @@ ovr_combined=/overlay/combined
 /bin/mount -n -t tmpfs none ${ovr_rwdata}
 
 case "$OVERLAY" in
+    overlay) echo "Remounting root as overlay ..."
+        mkdir -p ${ovr_rwdata}/data
+        mkdir -p ${ovr_rwdata}/work
+        /bin/mount -n -t overlay -o upperdir=${ovr_rwdata}/data,workdir=${ovr_rwdata}/work,lowerdir=${ovr_robase} overlay ${ovr_combined}
+        ;;
     overlayfs) echo "Remounting root as overlayfs ..."
         /bin/mount -n -t overlayfs -o upperdir=${ovr_rwdata},lowerdir=${ovr_robase} overlayfs ${ovr_combined}
         ;;
