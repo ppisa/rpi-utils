@@ -1,0 +1,36 @@
+VERSION = 3
+PATCHLEVEL = 18
+
+ARCH            = arm
+CROSS_COMPILE   = arm-rpi-linux-gnueabihf-
+QTDIR = /usr/share/qt4
+
+export QTDIR
+
+lastword = $(word $(words $(1)),$(1))
+makedir := $(dir $(call lastword,$(MAKEFILE_LIST)))
+
+MAKEARGS := -C $(shell cd $(makedir) ; cd ../../u-boot-swarren-rpi ; pwd )
+MAKEARGS += O=$(if $(patsubst /%,,$(makedir)),$(CURDIR)/)$(patsubst .,,$(patsubst %/,%,$(makedir)))
+MAKEARGS += ARCH=$(ARCH) $(if $(CROSS_COMPILE),CROSS_COMPILE=$(CROSS_COMPILE))
+MAKEARGS += QTDIR=$(QTDIR)
+
+MAKEFLAGS += --no-print-directory
+
+.PHONY: all $(MAKECMDGOALS)
+
+all	:= $(filter-out all Makefile,$(MAKECMDGOALS))
+
+#$(warning makedir=$(makedir))
+#$(warning MAKECMDGOALS=$(MAKECMDGOALS))
+#$(warning MAKEARGS=$(MAKEARGS))
+#$(error stop)
+
+all:
+	$(MAKE) $(MAKEARGS) $(all)
+
+Makefile:;
+
+$(all) %/: all
+	@:
+

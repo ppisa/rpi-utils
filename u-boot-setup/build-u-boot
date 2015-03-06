@@ -1,0 +1,21 @@
+#!/bin/sh
+
+if [ ! -e u-boot-swarren-rpi ] ; then
+  git clone git://github.com/swarren/u-boot.git u-boot-swarren-rpi || exit 1
+fi
+
+(cd u-boot-swarren-rpi && git checkout rpi_dev ) || \
+  (cd u-boot-swarren-rpi && git checkout -b rpi_dev origin/rpi_dev ) || \
+   exit 1
+
+(cd u-boot-swarren-rpi && git pull ) || exit 1
+
+mkdir -p build/rpi || exit 1
+
+cp GNUmakefile-template build/rpi/GNUmakefile
+
+( cd build/rpi && make distclean && make rpi_defconfig && make u-boot.bin ) || exit 1
+
+mkdir -p compiled/rpi || exit 1
+
+cp build/rpi/u-boot.bin boot || exit 1
