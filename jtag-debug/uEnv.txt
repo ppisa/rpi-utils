@@ -1,0 +1,11 @@
+serverip=192.168.1.10
+ipaddr=192.168.1.33
+
+bootargs=dwc_otg.lpm_enable=0 console=ttyAMA0,115200 kgdboc=ttyAMA0,115200 smsc95xx.macaddr=${usbethaddr} root=/dev/nfs ro nfsroot=192.168.1.10:/srv/nfs/raspbian ip=192.168.1.33:::::eth0 elevator=deadline rootwait init=/sbin/init-overlay
+bootcmd=mw.l 0x20200000 0x04a020; mw.l 0x20200008 0x65b6c0; usb start; tftp ${kernel_addr_r} 192.168.1.10:/rpi/zImage; tftp ${fdt_addr_r} 192.168.1.10:/rpi/bcm2708-rpi-b.dtb; bootz ${kernel_addr_r} - ${fdt_addr_r};
+
+# optional alternatives
+bootargs-nfs-bak=console=ttyAMA0,115200 root=/dev/nfs rw nfsroot=192.168.1.10:/srv/nfs/rpi ip=192.168.1.32:::::eth0 rootwait bcm2708.serial=0x78e5f4de smsc95xx.macaddr=B8:27:EB:E5:F4:DE
+bootargs-mmc=dwc_otg.lpm_enable=0 console=ttyAMA0,115200 kgdboc=ttyAMA0,115200 smsc95xx.macaddr=${usbethaddr} root=/dev/mmcblk0p2 rootfstype=ext4 elevator=deadline rootwait ro init=/sbin/init-overlay
+bootcmd-linux=mw.l 0x20200000 0x04a020; mw.l 0x20200008 0x65b6c0; usb start; tftp ${kernel_addr_r} 192.168.1.10:/rpi/zImage; tftp ${fdt_addr_r} 192.168.1.10:/rpi/bcm2708-rpi-b.dtb; bootz ${kernel_addr_r} - ${fdt_addr_r};
+bootcmd-rtems=mw.l 0x20200000 0x04a020; mw.l 0x20200008 0x65b6c0; usb start; tftp ${kernel_addr_r} 192.168.1.10:/rpi/rtems/app.img ; bootm ${kernel_addr_r}
