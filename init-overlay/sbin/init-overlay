@@ -62,7 +62,13 @@ done
 #ovr_combined=${rootmnt}
 #ovr_for_nfs=nfs
 
-#For local system rearranged from init
+# Remeber list of mountpoints to move under new root
+mounts_to_move="$( \
+  /bin/sed -n -e 's/^[^ ]* \([^ ]*\) .*$/\1/p' /proc/mounts |
+  /bin/sed -n -e '/^\/$/d' -e '/^\/overlay/d' \
+              -e '/^\/dev\/pts/d' -e 's/^\/\(.*\)$/\1/p' )"
+
+# For local system rearranged from init
 /bin/mount -n -t tmpfs none /overlay
 /bin/mkdir -p /overlay/rwdata
 /bin/mkdir -p /overlay/robase
@@ -96,10 +102,6 @@ case "$OVERLAY" in
         ;;
 esac
 
-if [ -n "$proc_local_mount" ] ; then
-    /bin/umount -n /proc
-fi
-
 # Move rwdata mount under new prepared filesystem to allow access
 # to local rwdata in case of tmpsfs
 /bin/mkdir -p ${ovr_combined}/overlay/rwdata
@@ -111,6 +113,18 @@ chmod 755 ${ovr_combined} # Disable rw access for non-root users
 
 /bin/touch ${ovr_combined}/fastboot
 
+# Move already mounted filesystems to target location
+for mtm in ${mounts_to_move} ; do
+    if [ -e "/${mtm}" ] ; then
+        if [ -n "$proc_local_mount" -a "${mtm}" = "proc" ] ; then
+            echo "skipping temporarily mounted /proc"
+        else
+            /bin/mkdir -p "${ovr_combined}/${mtm}"
+            /bin/mount --move "/${mtm}" "${ovr_combined}/${mtm}"
+        fi
+    fi
+done
+
 # Create standard mount points for virtual filesystems
 /bin/mkdir -p ${ovr_combined}/dev
 /bin/mkdir -p ${ovr_combined}/proc
@@ -118,6 +132,12 @@ chmod 755 ${ovr_combined} # Disable rw access for non-root users
 /bin/mkdir -p ${ovr_combined}/tmp
 /bin/mkdir -p ${ovr_combined}/run
 /bin/mkdir -p ${ovr_combined}/var/lock
+
+if [ -n "$proc_local_mount" ] ; then
+    /bin/umount -n /proc
+fi
+
+unset mounts_to_move mtm proc_local_mount
 
 cd ${ovr_combined}
 
