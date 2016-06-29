@@ -6,7 +6,7 @@ nc -w 3 -z localhost 4444
 if [ $? -ne 0 ]
 then
   echo "Starting OpenOCD"
-  openocd -d -f "$SCRIP_DIR/rpi-jt_usb5.cfg" &
+  openocd -f "$SCRIP_DIR/rpi-jt_usb5.cfg" &
   OPENOCD_PID=$!
   nc -w 10 -z localhost 4444
   if [ $? -ne 0 ]
