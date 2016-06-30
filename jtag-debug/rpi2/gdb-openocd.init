@@ -1,0 +1,4 @@
+set endian little
+target remote localhost:3333
+#load
+source gdb_initial_commands
