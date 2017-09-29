@@ -120,7 +120,7 @@ for mtm in ${mounts_to_move} ; do
             echo "skipping temporarily mounted /proc"
         else
             /bin/mkdir -p "${ovr_combined}/${mtm}"
-            /bin/mount --move "/${mtm}" "${ovr_combined}/${mtm}"
+            /bin/mount -n --move "/${mtm}" "${ovr_combined}/${mtm}"
         fi
     fi
 done
