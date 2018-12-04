@@ -184,7 +184,9 @@ done
 /bin/mkdir -p ${ovr_combined}/sys
 /bin/mkdir -p ${ovr_combined}/tmp
 /bin/mkdir -p ${ovr_combined}/run
-/bin/mkdir -p ${ovr_combined}/var/lock
+if [ ! -L ${ovr_combined}/var/lock ] ; then
+    /bin/mkdir -p ${ovr_combined}/var/lock
+fi
 
 if [ -n "$proc_local_mount" ] ; then
     /bin/umount -n /proc
