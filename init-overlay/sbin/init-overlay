@@ -32,9 +32,42 @@ if [ -e "/overlay/disable" ] ; then
     exec /sbin/init
 fi
 
+if [ -e /sbin/init-overlay-get-mode ] ; then
+    . /sbin/init-overlay-get-mode
+fi
+
+if [ "$OVERLAY" = disabled ] ; then
+    echo "Overlay disabled"
+    exec /sbin/init
+fi
+
 # If no specific overlay support is selected, try all known options
 if [ -z "$OVERLAY" ] ; then
-    OVERLAY="aufs overlay overlayfs unionfs"
+    OVERLAY="overlay overlayfs aufs unionfs"
+fi
+
+if [ -z "$OVERLAY_RW_LAYER_DIR" ] ; then
+    OVERLAY_RW_LAYER_DIR=/overlay-rw-layer
+fi
+
+# Select specific kind of overlay RW layer
+# [tmpfs, persistent, persistent-clear, persistent-rename]
+if [ -z "$OVERLAY_RW_LAYER" ] ; then
+    if [ -d "$OVERLAY_RW_LAYER_DIR" ] ; then
+        OVERLAY_RW_LAYER="persistent"
+    else
+        OVERLAY_RW_LAYER="tmpfs"
+    fi
+fi
+
+if [ "$OVERLAY_RW_LAYER" = persistent-clear ] ; then
+    OVERLAY_RW_LAYER="persistent"
+    OVERLAY_RW_LAYER_CLEAR=yes
+fi
+
+if [ "$OVERLAY_RW_LAYER" = persistent-move ] ; then
+    OVERLAY_RW_LAYER="persistent"
+    OVERLAY_RW_LAYER_MOVE=yes
 fi
 
 if [ ! -e /proc/filesystems ] ; then
@@ -73,6 +106,10 @@ mounts_to_move="$( \
 /bin/mkdir -p /overlay/rwdata
 /bin/mkdir -p /overlay/robase
 /bin/mkdir -p /overlay/combined
+if [ "$OVERLAY_RW_LAYER" = "persistent" ] ; then
+  echo "Remounting root rw due to "$OVERLAY_RW_LAYER_DIR""
+  mount -n -o remount,rw,noatime /
+fi
 /bin/mount --bind / /overlay/robase
 
 ovr_rwdata=/overlay/rwdata
@@ -81,7 +118,23 @@ ovr_combined=/overlay/combined
 
 # Prepare filesystem for local data storage...
 /bin/mkdir -p ${ovr_rwdata}
-/bin/mount -n -t tmpfs none ${ovr_rwdata}
+
+if [ "$OVERLAY_RW_LAYER" = "persistent" ] ; then
+    if [ "$OVERLAY_RW_LAYER_MOVE" = yes ] ; then
+        rm -rf "$OVERLAY_RW_LAYER_DIR"-bak
+        mv "$OVERLAY_RW_LAYER_DIR" "$OVERLAY_RW_LAYER_DIR"-bak
+    fi
+    if [ "$OVERLAY_RW_LAYER_CLEAR" = yes ] ; then
+        rm -rf "$OVERLAY_RW_LAYER_DIR"-bak
+        rm -rf "$OVERLAY_RW_LAYER_DIR"
+    fi
+    mkdir -p "$OVERLAY_RW_LAYER_DIR"
+    echo "Attempt to use bind mount "$OVERLAY_RW_LAYER_DIR" for overlay rwdata"
+    mount -n --bind /overlay/robase/"$OVERLAY_RW_LAYER_DIR" ${ovr_rwdata}
+    echo "After bind mount "$OVERLAY_RW_LAYER_DIR" for overlay rwdata"
+else
+    /bin/mount -n -t tmpfs none ${ovr_rwdata}
+fi
 
 case "$OVERLAY" in
     overlay) echo "Remounting root as overlay ..."
