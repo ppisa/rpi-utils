@@ -123,6 +123,7 @@ case "$1" in
 
     install)
         modify_boot_cmdline " ro init=/sbin/init-overlay"
+        mkdir -p /overlay
         ;;
 
     uninstall)
