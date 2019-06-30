@@ -1,54 +1,94 @@
-Overlay Setup for Read-Only Root FS
-===================================
-  Pavel Pisa <ppisa@pikron.com>
+# Overlay Setup for Read-Only Root FS
+
+Pavel Pisa <ppisa@pikron.com>
+
+Complete overlay to allow arbitrarily changes which
+can be discarded by reboot/reset is provided by **init-overlay**
+utility which is part of the next Raspberry-Pi utilities
+
+https://github.com/ppisa/rpi-utils
+
+# Setup
+
+For instalation, copy utilities `/sbin/init-overlay` and `/sbin/overlayctl`
+into filesystem. Directory /overlay has to be created.
+
+There is option to use RW overlay which stores overlay data
+directly in another directory of the root filesystem
+The persistent overlay content is stored in
+`/overlay-rw-layer` directory in such case by default.
+
 
 To activate feature "/sbin/init-overlay" has to
 be set as init in Linux kernel command line.
 
-I.e. add "ro init=/sbin/init-overlay" at the end
-of "/boot/cmdline.txt" line.
+I.e. add `ro init=/sbin/init-overlay` at the end
+of `/boot/cmdline.txt` line on Raspberry Pi.
 
-The script mounts "tmpfs" filesystem on this
-place after boot and prepares required mount points there.
-Then binds original root filesystem on "/overlay/robase"
+The automated process for Raspberry Pi can be invoked
+by overlayctl control utility
+```
+overlayctl install
+```
+
+Similar change in `/boot/uEnv.txt` for U-boot
+based systems like BegleBone can be used.
+
+```
+cmdline=init=/sbin/init-overlay
+```
+
+Ccmmand line change can be applied to GRUB
+configuration files as well.
+
+# Operation
+
+The script `init-overlay` mounts `tmpfs` filesystem onto `/overlay`
+directory after boot and prepares required mount points there.
+Then binds original root filesystem on `/overlay/robase`
 creates another filesystem for temporal data
-at "/overlay/rwdata". It is "tmpfs" for now but some
-another partition can be used to keep data over boot
+at `/overlay/rwdata`. It is "tmpfs" for by default but some
+another partition can be used to keep delta data over boot
 there.
 
 Then script finds available overlay filesystem support
 "overlayfs aufs unionfs" and prepares combined filesystem
-at "/overlay/combined". The last operations are 
+at `/overlay/combined`. The last operations are
 swaping of root filesystem of actual (PID 1) process
-with "/overlay/pivot" and invoking regular distribution
-provided "/sbin/init".
+with `/overlay/pivot` and invoking regular distribution
+provided `/sbin/init`.
 
 The feature can be disabled temporarily by creation
-of "/overlay/disable" file in this directory.
+of `/overlay/disable` file in this directory.
 But this file has to be created on original
 filesystem. From system running overlay setup
-this can be achieved by when logged in as root
-(sudo -i) by next commands sequence
+this can be achieved (when logged in as root
+or after sudo -i) by next commands sequence
 
-  mkdir /mnt/tmp
-  mount /dev/mmcblk0p1 /mnt
-  cd /mnt/tmp
-  touch overlay/disable
-  reboot
+```
+mkdir /mnt/tmp
+mount /dev/mmcblk0p1 /mnt
+cd /mnt/tmp
+touch overlay/disable
+reboot
+```
 
 To activate overaly setup again simply remove
 overlay disable file
 
-  rm /overlay/disable
+```
+rm /overlay/disable
+```
 
 Distribution can be updated with some care directly
 from overlay running system
 
-  mount -o remount,rw /overlay/robase/
-  chroot /overlay/robase/
-  aptitude update
+```
+mount -o remount,rw /overlay/robase/
+chroot /overlay/robase/
+aptitude update
   ...
-
+```
 But services restart during update can behave badly
 for now. It can to be resolved in future by
 mounting/binding of "run", "dev" and "proc"
@@ -62,3 +102,64 @@ it would require to use filesystem with RW snapshots/
 subvolumes support which tries to boot once to updated
 system and if correct made changes permanent by atomic
 commit. Can be done on btrfs with subvolumes.
+
+# The overlayctl utility
+
+This utility allows to enable and disable overlay
+mode.
+
+The overlay can be disabled for next boots by
+```
+overlayctl disable
+```
+Enabled again by
+```
+overlayctl enable
+```
+Actual mode and next boot preset can be obtained by
+```
+overlayctl status
+```
+Base/lower filesystem can be modified under directory
+```
+/overlay/robase
+```
+Modified files and directories can be found under directory
+```
+/overlay/rwdata/data/
+```
+for `overlay` filesystem used. Directly in `/overlay/rwdata` for `aufs`.
+
+# Advanced use
+
+Actual init-overlay version allows to modify mode of operation by custom script.
+
+If mode checking scrip `/sbin/init-overlay-get-mode`
+is provided then it is called at start of overlay script.
+
+It can set next environment variables to modify
+init-overlay mode:
+
+ - `OVERLAY` [ overlay | overlayfs | aufs | unionfs | disable ]
+   - select which technology should be used to setup overlay. Default is `overlay`
+ - `OVERLAY_RW_LAYER` [ tmpfs | persistent | persistent-clear | persistent-move ]
+   - where should be stored modifications. Default is `persistent` if directory specified
+     by `OVERLAY_RW_LAYER_DIR` exists else `tmpfs`.
+ - `OVERLAY_RW_LAYER_DIR`
+   - which directory should be used for persistent overlay layer. Default `/overlay-rw-layer`
+ - `OVERLAY_RW_LAYER_CLEAR` [yes]
+   - alternative way to request clear/remove of all alternative data. Unset by default.
+ - `OVERLAY_RW_LAYER_MOVE` [yes]
+   - alternative way to request backup of persistent data and start with clear base. Unset by default.
+
+
+## Other alternatives
+### Squashfs
+
+One other idea is to have read-only EXT4 partition on EMMC. The Squashfs file would be located in that EXT4 and use trampoline to switch to that Squashfs as root during startup. This would allow atomic update. Load file under new name then running rename/renameat/renameat2 to rename it to Squashfs root file and then reboot. This process has advantage that on journaled filesystems (EXT4, btrfs) there is no time window when Squasfs root file is missing.
+
+### overlayroot package
+
+I have found that there is package **overlayroot** included in BeagleBone image build. It is controlled by file `/etc/overlayroot.conf`. It allows to setup tmpfs or other device as backing store for overlay. It is implemented as hooks into `/usr/share/initramfs-tools` which can be advantage but is more complicated than **init-overlay**
+
+ http://launchpad.net/cloud-initramfs-tools
